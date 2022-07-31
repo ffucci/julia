@@ -1110,11 +1110,39 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     return mark_julia_type(ctx, ifelse_result, isboxed, jt);
 }
 
+// Callbacks
+static jl_cgval_t on_pointer_ref(jl_codectx_t &ctx, jl_cgval_t *argv, size_t nargs)
+{
+     ++Emitted_pointerref;
+     assert(nargs == 3);
+     return emit_pointerref(ctx, argv);
+}
+
+static jl_cgval_t on_pointer_set(jl_codectx_t &ctx, jl_cgval_t *argv, size_t nargs)
+{
+    ++Emitted_pointerset;
+    assert(nargs == 4);
+    return emit_pointerset(ctx, argv);
+}
+
+static jl_cgval_t on_atomic_fence(jl_codectx_t &ctx, jl_cgval_t *argv, size_t nargs)
+{
+    ++Emitted_atomic_fence;
+    assert(nargs == 1);
+    return emit_atomicfence(ctx, argv);
+}
+
+typedef jl_cgval_t (*PointerFunc)(jl_codectx_t&,jl_cgval_t *, size_t);
+static std::unordered_map<intrinsic, PointerFunc> intrinsics_map = {{pointerref, &on_pointer_ref},
+                                                                    {pointerset, &on_pointer_set},
+                                                                    {atomic_fence, &on_atomic_fence}};
+
 static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs)
 {
     assert(f < num_intrinsics);
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
+
     unsigned expected_nargs = jl_intrinsic_nargs((int)f);
     if (expected_nargs && expected_nargs != nargs) {
         jl_errorf("intrinsic #%d %s: wrong number of arguments", f, jl_intrinsic_name((int)f));
@@ -1132,6 +1160,10 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     // this forces everything to use runtime-intrinsics (e.g. for testing)
     // return emit_runtime_call(ctx, f, argv, nargs);
+    if(intrinsics_map.count(f) > 0)
+    {
+        return intrinsics_map[f](ctx, argv, nargs);
+    }
 
     switch (f) {
     case arraylen: {
@@ -1143,18 +1175,18 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             return emit_runtime_call(ctx, f, argv, nargs);
         return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
     }
-    case pointerref:
-        ++Emitted_pointerref;
-        assert(nargs == 3);
-        return emit_pointerref(ctx, argv);
-    case pointerset:
-        ++Emitted_pointerset;
-        assert(nargs == 4);
-        return emit_pointerset(ctx, argv);
-    case atomic_fence:
-        ++Emitted_atomic_fence;
-        assert(nargs == 1);
-        return emit_atomicfence(ctx, argv);
+    // case pointerref:
+    //     ++Emitted_pointerref;
+    //     assert(nargs == 3);
+    //     return emit_pointerref(ctx, argv);
+    // case pointerset:
+    //     ++Emitted_pointerset;
+    //     assert(nargs == 4);
+    //     return emit_pointerset(ctx, argv);
+    // case atomic_fence:
+    //     ++Emitted_atomic_fence;
+    //     assert(nargs == 1);
+    //     return emit_atomicfence(ctx, argv);
     case atomic_pointerref:
         ++Emitted_atomic_pointerref;
         assert(nargs == 2);
