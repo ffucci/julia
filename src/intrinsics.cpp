@@ -1,39 +1,12 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-namespace JL_I {
-#include "intrinsics.h"
-}
+#include "intrisics_utils.hpp"
 
 #include "ccall.cpp"
 
 //Mark our stats as being from intrinsics irgen
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "julia_irgen_intrinsics"
-
-STATISTIC(EmittedConstants, "Number of constants emitted");
-STATISTIC(EmittedCoercedUnboxes, "Number of unbox coercions emitted");
-STATISTIC(EmittedUnboxes, "Number of unboxes emitted");
-STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
-STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
-STATISTIC(Emitted_arraylen, "Number of arraylen calls emitted");
-STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
-STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
-STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
-STATISTIC(Emitted_atomic_pointerref, "Number of atomic_pointerref calls emitted");
-STATISTIC(Emitted_atomic_pointerop, "Number of atomic_pointerop calls emitted");
-STATISTIC(Emitted_bitcast, "Number of bitcast calls emitted");
-STATISTIC(Emitted_trunc_int, "Number of trunc_int calls emitted");
-STATISTIC(Emitted_sext_int, "Number of sext_int calls emitted");
-STATISTIC(Emitted_zext_int, "Number of zext_int calls emitted");
-STATISTIC(Emitted_uitofp, "Number of uitofp calls emitted");
-STATISTIC(Emitted_sitofp, "Number of sitofp calls emitted");
-STATISTIC(Emitted_fptoui, "Number of fptoui calls emitted");
-STATISTIC(Emitted_fptosi, "Number of fptosi calls emitted");
-STATISTIC(Emitted_fptrunc, "Number of fptrunc calls emitted");
-STATISTIC(Emitted_fpext, "Number of fpext calls emitted");
-STATISTIC(Emitted_not_int, "Number of not_int calls emitted");
-STATISTIC(Emitted_have_fma, "Number of have_fma calls emitted");
-STATISTIC(EmittedUntypedIntrinsics, "Number of untyped intrinsics emitted");
 
 using namespace JL_I;
 
@@ -1110,33 +1083,6 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     return mark_julia_type(ctx, ifelse_result, isboxed, jt);
 }
 
-// Callbacks
-static jl_cgval_t on_pointer_ref(jl_codectx_t &ctx, jl_cgval_t *argv, size_t nargs)
-{
-     ++Emitted_pointerref;
-     assert(nargs == 3);
-     return emit_pointerref(ctx, argv);
-}
-
-static jl_cgval_t on_pointer_set(jl_codectx_t &ctx, jl_cgval_t *argv, size_t nargs)
-{
-    ++Emitted_pointerset;
-    assert(nargs == 4);
-    return emit_pointerset(ctx, argv);
-}
-
-static jl_cgval_t on_atomic_fence(jl_codectx_t &ctx, jl_cgval_t *argv, size_t nargs)
-{
-    ++Emitted_atomic_fence;
-    assert(nargs == 1);
-    return emit_atomicfence(ctx, argv);
-}
-
-typedef jl_cgval_t (*PointerFunc)(jl_codectx_t&,jl_cgval_t *, size_t);
-static std::unordered_map<intrinsic, PointerFunc> intrinsics_map = {{pointerref, &on_pointer_ref},
-                                                                    {pointerset, &on_pointer_set},
-                                                                    {atomic_fence, &on_atomic_fence}};
-
 static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs)
 {
     assert(f < num_intrinsics);
@@ -1165,6 +1111,12 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return intrinsics_map[f](ctx, argv, nargs);
     }
 
+    if(intrinsics_atomics_map.count(f) > 0)
+    {
+        // map specialized for atomics operations
+        return intrinsics_atomics_map[f](ctx, f, argv, nargs);
+    }
+
     switch (f) {
     case arraylen: {
         ++Emitted_arraylen;
@@ -1187,16 +1139,16 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     //     ++Emitted_atomic_fence;
     //     assert(nargs == 1);
     //     return emit_atomicfence(ctx, argv);
-    case atomic_pointerref:
-        ++Emitted_atomic_pointerref;
-        assert(nargs == 2);
-        return emit_atomic_pointerref(ctx, argv);
-    case atomic_pointerset:
-    case atomic_pointerswap:
-    case atomic_pointermodify:
-    case atomic_pointerreplace:
-        ++Emitted_atomic_pointerop;
-        return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
+    // case atomic_pointerref:
+    //     ++Emitted_atomic_pointerref;
+    //     assert(nargs == 2);
+    //     return emit_atomic_pointerref(ctx, argv);
+    // case atomic_pointerset:
+    // case atomic_pointerswap:
+    // case atomic_pointermodify:
+    // case atomic_pointerreplace:
+    //     ++Emitted_atomic_pointerop;
+    //     return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
     case bitcast:
         ++Emitted_bitcast;
         assert(nargs == 2);
