@@ -37,6 +37,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv);
 static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, jl_cgval_t *argv);
 static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv);
 static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, int nargs, const jl_cgval_t *modifyop);
+static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv);
 
 // Callbacks
 static jl_cgval_t on_pointer_ref(jl_codectx_t &ctx, jl_cgval_t *argv, size_t nargs)
@@ -67,11 +68,19 @@ static jl_cgval_t on_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv, size
     return emit_atomic_pointerref(ctx, argv);
 }
 
-static jl_cgval_t on_atomic_pointerop(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, int nargs)
+static jl_cgval_t on_bitcast(jl_codectx_t &ctx, jl_cgval_t *argv, size_t nargs)
+{
+    ++Emitted_bitcast;
+    assert(nargs == 2);
+    return generic_bitcast(ctx, argv);
+} 
+
+// POINTER OP operations
+static jl_cgval_t on_atomic_pointerop(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
 {
     ++Emitted_atomic_pointerop;
     return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
-} 
+}
 
 // Callback types
 typedef jl_cgval_t (*PointerRefFunc)(jl_codectx_t&,jl_cgval_t *, size_t);
@@ -80,11 +89,12 @@ typedef jl_cgval_t (*PointerAtomicOpFunc)(jl_codectx_t&,JL_I::intrinsic, const j
 static std::unordered_map<JL_I::intrinsic, PointerRefFunc> intrinsics_map = {{JL_I::pointerref, &on_pointer_ref},
                                                                              {JL_I::pointerset, &on_pointer_set},
                                                                              {JL_I::atomic_fence, &on_atomic_fence},
-                                                                             {JL_I::atomic_pointerref, &on_atomic_pointerref}};
+                                                                             {JL_I::atomic_pointerref, &on_atomic_pointerref},
+                                                                             {JL_I::bitcast, &on_bitcast}};
 
 
 // !brief this map is for atomic operations
-static std::unordered_map<JL_I::intrinsic, PointerAtomicOpFunc> intrinsics_atomics_map = {{JL_I::atomic_pointerset, &on_atomic_pointerop},
+static std::unordered_map<JL_I::intrinsic, PointerAtomicOpFunc> intrinsics_with_f_map = {{JL_I::atomic_pointerset, &on_atomic_pointerop},
                                                                                          {JL_I::atomic_pointerswap, &on_atomic_pointerop},
                                                                                          {JL_I::atomic_pointermodify, &on_atomic_pointerop},
                                                                                          {JL_I::atomic_pointerreplace, &on_atomic_pointerop}};
