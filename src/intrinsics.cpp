@@ -1111,10 +1111,10 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return intrinsics_map[f](ctx, argv, nargs);
     }
 
-    if(intrinsics_atomics_map.count(f) > 0)
+    if(intrinsics_with_f_map.count(f) > 0)
     {
         // map specialized for atomics operations
-        return intrinsics_atomics_map[f](ctx, f, argv, nargs);
+        return intrinsics_with_f_map[f](ctx, f, argv, nargs);
     }
 
     switch (f) {
@@ -1149,10 +1149,10 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     // case atomic_pointerreplace:
     //     ++Emitted_atomic_pointerop;
     //     return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
-    case bitcast:
-        ++Emitted_bitcast;
-        assert(nargs == 2);
-        return generic_bitcast(ctx, argv);
+    // case bitcast:
+    //     ++Emitted_bitcast;
+    //     assert(nargs == 2);
+    //     return generic_bitcast(ctx, argv);
     case trunc_int:
         ++Emitted_trunc_int;
         assert(nargs == 2);
