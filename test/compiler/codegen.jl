@@ -5,6 +5,7 @@
 using Random
 using InteractiveUtils
 using Libdl
+using Test
 
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
