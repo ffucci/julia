@@ -469,7 +469,7 @@ function adjust_effects(sv::InferenceState)
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
         end
         if is_effect_overridden(override, :effect_free)
-            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+            ipo_effects = Effects(ipo_effects; effect_free=true)
         end
         if is_effect_overridden(override, :nothrow)
             ipo_effects = Effects(ipo_effects; nothrow=true)
